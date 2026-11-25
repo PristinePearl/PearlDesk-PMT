@@ -1617,6 +1617,11 @@ body.app-exit .layout,body.app-exit .topbar{transition:opacity .5s ease,transfor
     <div class="chart-box"><div class="chart-title">Tasks by Type</div><div class="bar-chart" id="type-chart"><div style="color:var(--muted);font-size:13px;align-self:center;font-weight:500">Loading…</div></div></div>
   </div>
   <div class="section">
+    <div class="section-title">Monthly Progress <span class="badge">Months with pending tasks</span>
+      <label style="float:right;font-size:11px;font-weight:500;color:var(--muted);cursor:pointer;text-transform:none;letter-spacing:0"><input type="checkbox" id="dash-month-all" onchange="renderDashboard()"> Show all months</label></div>
+    <div id="dash-month-progress"></div>
+  </div>
+  <div class="section">
     <div class="section-title">Employee Performance Summary <span class="badge">Live</span></div>
     <div class="table-wrap">
       <table>
@@ -1738,12 +1743,13 @@ body.app-exit .layout,body.app-exit .topbar{transition:opacity .5s ease,transfor
   <div class="section">
     <div class="section-title">New Task</div>
     <div class="form-grid">
-      <div class="form-group"><label>Employee *</label><select id="t-emp" onchange="fillAreaFromEmp()"><option value="">— Select Employee —</option></select></div>
+      <div class="form-group"><label>Employee *</label><select id="t-emp" onchange="fillAreaFromEmp();allotHint()"><option value="">— Select Employee —</option></select></div>
       <div class="form-group"><label>Area of Work</label><select id="t-area" onchange="renderAreaTaskNames()"><option>— Select employee first —</option></select></div>
-      <div class="form-group"><label>Task Type *</label><select id="t-type"><option>Daily</option><option>Weekly</option><option>Monthly</option><option>One Time</option></select></div>
+      <div class="form-group"><label>Task Type *</label><select id="t-type" onchange="allotToggle()"><option>Daily</option><option>Weekly</option><option>Monthly</option><option>One Time</option></select></div>
       <div class="form-group"><label>Task Name * <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;margin-left:6px;cursor:pointer"><input type="checkbox" id="t-name-all" style="width:auto" onchange="renderAreaTaskNames()"/> show all names</label></label><input id="t-name" list="task-name-list-area" autocomplete="off" placeholder="Select or type a new task name" onchange="tmNamePicked()"/><div id="t-name-hint" style="font-size:11px;color:var(--muted2);margin-top:4px"></div></div>
       <div class="form-group full"><label>Work Assigned</label><textarea id="t-work" placeholder="Describe the work to be completed…"></textarea></div>
       <div class="form-group"><label>Target Date *</label><input type="date" id="t-target"/></div>
+      <div class="form-group" id="t-allot-wrap"><label>Allotment Date (repeats from this date)</label><input type="date" id="t-allot" onchange="allotHint()"/><div id="t-allot-hint" style="font-size:11px;color:var(--accent2);font-weight:600;margin-top:5px"></div></div>
       <div class="form-group full"><label>Attachments (optional · max 5 files · 5 MB each)</label><input type="file" id="t-files" multiple/></div>
     </div>
     <div class="btn-row"><button class="btn btn-primary" onclick="assignTask()">◆ Assign Task</button><button class="btn btn-ghost" onclick="openMultiTask()">☰ Multiple Tasks (one staff)</button></div>
@@ -2060,6 +2066,7 @@ body.app-exit .layout,body.app-exit .topbar{transition:opacity .5s ease,transfor
   <div id="emp-task-section">
     <div class="section">
       <div class="section-title" id="emp-tasks-title">Assigned Tasks</div>
+      <div id="emp-next-wrap"></div>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Task ID</th><th>Task Name</th><th>Area</th><th>Type</th><th>Work Assigned</th><th>Target</th><th>Status</th><th>KPI</th><th>Update</th></tr></thead>
@@ -2094,6 +2101,11 @@ body.app-exit .layout,body.app-exit .topbar{transition:opacity .5s ease,transfor
       </div>
       <span id="ed-rate-num" style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent2);min-width:40px;letter-spacing:-.5px">0%</span>
     </div>
+  </div>
+  <div class="section">
+    <div class="section-title">Monthly Progress <span class="badge">Months with pending tasks</span>
+      <label style="float:right;font-size:11px;font-weight:500;color:var(--muted);cursor:pointer;text-transform:none;letter-spacing:0"><input type="checkbox" id="ed-month-all" onchange="renderEmpDashboard()"> Show all months</label></div>
+    <div id="ed-month-progress"></div>
   </div>
   <div class="chart-grid" style="grid-template-columns:repeat(3,1fr)">
     <div class="chart-box" id="ed-kpi-daily">
@@ -2773,6 +2785,7 @@ async function fullSync(){
     if(Array.isArray(d.holidays)){DB.holidays=d.holidays.map(h=>({date:fmtDate(h.DATE),name:String(h.NAME||'')})).filter(h=>h.date);}
     if(Array.isArray(d.leaves)){DB.leaves=d.leaves.map(l=>({id:String(l.LEAVE_ID||''),empId:String(l.EMP_ID||''),name:String(l.NAME||''),from:fmtDate(l.FROM_DATE),to:fmtDate(l.TO_DATE),reason:String(l.REASON||'')})).filter(l=>l.id&&l.from&&l.to);}
     if(Array.isArray(d.competencies)){DB.competencies=d.competencies.map(c=>({empId:String(c.EMP_ID||''),name:String(c.NAME||''),period:String(c.PERIOD||'').slice(0,7),punctuality:cn(c.PUNCTUALITY),communication:cn(c.COMMUNICATION_TEAMWORK),planning:cn(c.WORK_PLANNING),initiation:cn(c.PROCESS_INITIATION),knowledge:cn(c.KNOWLEDGE),integrity:cn(c.INTEGRITY),remarks:String(c.REMARKS||''),ratedBy:String(c.RATED_BY||''),updatedAt:String(c.UPDATED_AT||'')})).filter(c=>c.empId&&c.period);}
+    if(currentUser&&currentUser.role==='employee'){const td0=todayStr();DB.tasks=DB.tasks.filter(t=>!(AA_TYPES.includes(t.taskType)&&String(t.assignedDate||'').slice(0,10)>td0));}   // not visible until its allotment date
     {const rs={};DB.resigned.forEach(s=>{rs[s.empId]=1;});DB.rTasks=DB.tasks.filter(t=>rs[t.empId]);DB.tasks=DB.tasks.filter(t=>!rs[t.empId]);DB.rPW=DB.pendingWorks.filter(p=>rs[p.empId]);DB.pendingWorks=DB.pendingWorks.filter(p=>!rs[p.empId]);}
     if(d.settings){const raw=d.settings.WEEKLY_OFF===undefined?'0':String(d.settings.WEEKLY_OFF);DB.settings.weeklyOff=raw.split(',').map(x=>x.trim()).filter(x=>x!=='').map(Number).filter(x=>x>=0&&x<=6);}
     DB.holidaySet={};DB.holidays.forEach(h=>{DB.holidaySet[h.date]=1;});
@@ -3058,6 +3071,24 @@ async function removeAllAoW(empId){
   catch(e){toast('Removed locally. DB sync failed.','var(--accent3)');}
 }
 
+// Allotment date (repeating tasks only): allotted on this date, then Daily = next working day,
+// Weekly = every 7 days, Monthly = same date every month (01/12/2026 → 01/01/2027 → 01/02/2027 ...)
+function allotToggle(){
+  const t=document.getElementById('t-type').value;const w=document.getElementById('t-allot-wrap');
+  if(w)w.style.display=AA_TYPES.includes(t)?'':'none';
+  allotHint();
+}
+function allotHint(){
+  const h=document.getElementById('t-allot-hint');if(!h)return;
+  const type=document.getElementById('t-type').value;
+  if(!AA_TYPES.includes(type)){h.textContent='';return;}
+  const a=document.getElementById('t-allot').value||todayStr();
+  const L=aaParse(a);let n;
+  if(type==='Daily'){n=aaAddDays(L,1);const emp=document.getElementById('t-emp').value;for(let i=0;i<400&&nonWorkingDay(emp,aaLocal(n));i++)n=aaAddDays(n,1);}
+  else if(type==='Weekly')n=aaAddDays(L,7);
+  else n=aaMonthOcc(L,1,L.getDate());
+  h.textContent='Next allotment: '+formatDate(aaLocal(n))+(type==='Monthly'?' (then every month on the same date)':type==='Weekly'?' (then every 7 days)':'');
+}
 function fillAreaFromEmp(){
   const empId=document.getElementById('t-emp').value;const areas=DB.aow.filter(a=>a.empId===empId);
   const sel=document.getElementById('t-area');
@@ -3074,17 +3105,20 @@ async function assignTask(){
   const files=[...(document.getElementById('t-files')?.files||[])];
   if(!tname||!target){toast('Task Name and Target Date required','var(--danger)');return;}
   const id='T'+String(Date.now()).slice(-6);const today=todayStr();
-  DB.tasks.push({id,assignedDate:today,empId,name,area,taskType:ttype,taskName:tname,workAssigned:work,targetDate:target,userRemarks:'',completedDate:'',status:'Pending',kpi:'',score:'',adminRemarks:''});
+  const isRep=AA_TYPES.includes(ttype);
+  const allot=isRep?(document.getElementById('t-allot').value||today):today;
+  if(isRep&&target<allot){toast('Target date cannot be before the allotment date','var(--danger)');return;}
+  DB.tasks.push({id,assignedDate:allot,empId,name,area,taskType:ttype,taskName:tname,workAssigned:work,targetDate:target,userRemarks:'',completedDate:'',status:'Pending',kpi:'',score:'',adminRemarks:''});
   renderTaskTable();renderDashboard();toast('Saving task…');
   try{
-    const r=await dbPost({action:'assignTask',empId,name,area,taskType:ttype,taskName:tname,workAssigned:work,targetDate:target,linkArea:true});
+    const r=await dbPost({action:'assignTask',empId,name,area,taskType:ttype,taskName:tname,workAssigned:work,targetDate:target,linkArea:true,assignedDate:isRep?allot:undefined});
     let realId=id;
     if(r?.result&&typeof r.result==='string'&&r.result.startsWith('T')){realId=r.result;const t=DB.tasks.find(x=>x.id===id);if(t)t.id=realId;}
     toast('✓ Task saved','var(--accent2)');
     if(files.length)await attUploadFiles(realId,files);
   }catch(e){toast('Saved locally. DB sync failed.','var(--accent3)');}
   const tf=document.getElementById('t-files');if(tf)tf.value='';
-  ['t-name','t-work','t-target'].forEach(x=>document.getElementById(x).value='');
+  ['t-name','t-work','t-target','t-allot'].forEach(x=>document.getElementById(x).value='');allotHint();
   document.getElementById('t-emp').value='';document.getElementById('t-area').innerHTML='<option>— Select employee first —</option>';
   renderAreaTaskNames();
   renderTaskTable();updateTaskCount();
@@ -3855,6 +3889,39 @@ async function submitRemark(){
   catch(e){toast('Saved locally. DB sync failed.','var(--accent3)');}
 }
 
+// Month-wise progress (by target date): "completed / total" for each month that still has pending tasks.
+function monthProgressHTML(tasks,showAll){
+  const g={};
+  tasks.forEach(t=>{
+    const m=String(t.targetDate||'').slice(0,7);
+    if(!/^\d{4}-\d{2}$/.test(m)||t.status==='Excused')return;
+    const o=g[m]=g[m]||{total:0,done:0,pend:0,aw:0,miss:0};
+    o.total++;
+    if(t.status==='Completed')o.done++;
+    else if(t.status==='Pending')o.pend++;
+    else if(t.status==='Awaiting Approval')o.aw++;
+    else if(t.status==='Missed')o.miss++;
+  });
+  const months=Object.keys(g).filter(m=>showAll||g[m].pend>0).sort().reverse();
+  if(!months.length)return'<div class="empty-state"><div class="ei">✓</div><p>No pending tasks in any month</p></div>';
+  const MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return months.map(m=>{
+    const o=g[m];const pct=o.total?Math.round(o.done/o.total*100):0;
+    const lbl=MN[+m.slice(5,7)-1]+' '+m.slice(0,4);
+    const clr=pct>=80?'var(--accent2)':pct>=50?'var(--accent3)':'var(--danger)';
+    const chips=(o.pend?`<span style="color:var(--accent3);font-weight:700">${o.pend} pending</span>`:'')
+      +(o.aw?`<span style="color:#7048e8;font-weight:700">${o.aw} awaiting approval</span>`:'')
+      +(o.miss?`<span style="color:var(--danger);font-weight:700">${o.miss} missed</span>`:'');
+    return`<div style="display:flex;align-items:center;gap:14px;padding:11px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
+      <div style="min-width:84px;font-weight:700;font-size:13px">${lbl}</div>
+      <div style="font-family:var(--mono);font-size:14px;font-weight:800;color:${clr};min-width:112px">${o.done} / ${o.total}<span style="font-size:11px;font-weight:500;color:var(--muted)"> completed</span></div>
+      <div style="flex:1;min-width:100px;background:#e8ecf4;border-radius:8px;height:8px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${clr};border-radius:8px"></div></div>
+      <div style="font-family:var(--mono);font-size:12px;font-weight:700;color:${clr};min-width:36px">${pct}%</div>
+      <div style="display:flex;gap:10px;font-size:11px;flex-wrap:wrap">${chips}</div>
+    </div>`;
+  }).join('');
+}
+
 function renderDashboard(){
   recalcStatuses();
   const tasks=DB.tasks;const done=tasks.filter(t=>t.status==='Completed');const pend=tasks.filter(t=>t.status==='Pending');const miss=tasks.filter(t=>t.status==='Missed');
@@ -3862,6 +3929,7 @@ function renderDashboard(){
   document.getElementById('s-total').textContent=tasks.length;document.getElementById('s-done').textContent=done.length;
   document.getElementById('s-pending').textContent=pend.length;document.getElementById('s-missed').textContent=miss.length;
   document.getElementById('s-kpi').textContent=avg||'—';document.getElementById('s-team').textContent=DB.staff.length;
+  {const mp=document.getElementById('dash-month-progress');if(mp)mp.innerHTML=monthProgressHTML(tasks,!!(document.getElementById('dash-month-all')||{}).checked);}
   const colors=['#3b5bdb','#0f9b6e','#e8840a','#d93025','#7048e8','#c2255c'];
   const empKpis={};DB.staff.forEach(s=>{empKpis[s.empId]={name:s.name,vals:[]};});
   tasks.forEach(t=>{if(t.kpi!==''&&empKpis[t.empId])empKpis[t.empId].vals.push(parseInt(t.kpi)||0);});
@@ -3955,7 +4023,16 @@ function exportTasksExcel(){
 
 function populateDropdowns(){
   const opts=DB.staff.map(s=>`<option value="${s.empId}">${s.name} · ${s.empId}</option>`).join('');
-  ['aow-emp','t-emp','emp-view-sel','flt-emp'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML='<option value="">— Select —</option>'+opts;});
+  const keepArea=(document.getElementById('t-area')||{}).value;
+  ['aow-emp','t-emp','emp-view-sel','flt-emp'].forEach(id=>{
+    const el=document.getElementById(id);if(!el)return;
+    const cur=el.value;                                   // keep the current selection when the list is rebuilt (auto sync)
+    el.innerHTML='<option value="">— Select —</option>'+opts;
+    if(cur&&[...el.options].some(o=>o.value===cur))el.value=cur;
+  });
+  const te=document.getElementById('t-emp');
+  if(te&&te.value){fillAreaFromEmp();const ta=document.getElementById('t-area');if(ta&&keepArea&&[...ta.options].some(o=>o.value===keepArea||o.text===keepArea)){ta.value=keepArea;renderAreaTaskNames();}}
+  if(typeof allotHint==='function')allotHint();
 }
 
 setInterval(()=>{if(dbConnected&&currentUser)fullSync();},5*60*1000);
@@ -4414,15 +4491,34 @@ function showPage(page){
   const pageEl=document.getElementById('page-'+page);if(pageEl)pageEl.classList.add('active');
 }
 
+// "Next: <task> — <date>" for repeating tasks that are completed and waiting for their next occurrence
+function empNextRepeatHTML(empId){
+  const today=aaParse(todayStr());
+  const rows=Object.values(aaSeries()).filter(ser=>ser.latest.empId===empId&&ser.latest.status==='Completed').map(ser=>{
+    const L=ser.latest;
+    let when;
+    if(ser.stopped)when=ser.pauseUntil?'paused until '+formatDate(ser.pauseUntil):'repeat paused';
+    else{const n=aaNextOcc(ser);when=n<=today?'today':formatDate(aaLocal(n));}
+    return{txt:`<b>${L.taskName}</b> <span style="font-family:var(--mono);font-size:10px;color:var(--accent3);font-weight:700">${L.taskType}</span> — ${when}`};
+  });
+  if(!rows.length)return'';
+  return`<div style="background:#f5f7fc;border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin:0 0 12px;font-size:12px;color:var(--text2)">
+    <div style="font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">↻ Next repeating tasks</div>
+    ${rows.map(r=>`<div style="padding:2px 0">Next: ${r.txt}</div>`).join('')}</div>`;
+}
 function loadEmpTasksForId(empId){
   const sel=document.getElementById('emp-view-sel');if(sel)sel.value=empId;
   const emp=DB.staff.find(s=>s.empId===empId);const name=emp?emp.name:empId;
   const sub=document.getElementById('emp-page-sub');if(sub)sub.textContent=`${name} · ${empId}`;
   const title=document.getElementById('emp-tasks-title');if(title)title.textContent=`Tasks for ${name}`;
-  recalcStatuses();const tasks=DB.tasks.filter(t=>t.empId===empId);
+  recalcStatuses();
+  const allMine=DB.tasks.filter(t=>t.empId===empId);
+  {const nw=document.getElementById('emp-next-wrap');if(nw)nw.innerHTML=empNextRepeatHTML(empId);}
+  // repeating (Daily/Weekly/Monthly) tasks that are already approved are history, so they are always hidden here
+  const tasks=allMine.filter(t=>!(AA_TYPES.includes(t.taskType)&&t.status==='Completed'));
   document.getElementById('emp-task-section').style.display='block';
   const tb=document.getElementById('emp-task-table');
-  if(!tasks.length){tb.innerHTML='<tr><td colspan="9" class="empty-state"><div class="ei">◌</div><p>No tasks assigned yet</p></td></tr>';return;}
+  if(!tasks.length){tb.innerHTML='<tr><td colspan="9" class="empty-state"><div class="ei">◌</div><p>'+(allMine.length?'No open tasks — all repeating tasks are completed':'No tasks assigned yet')+'</p></td></tr>';return;}
   tb.innerHTML=tasks.map(t=>`<tr class="row-clickable" onclick="openTaskDetailModal('${t.id}')">
     <td style="font-family:var(--mono);font-size:10px;color:var(--muted2)">${t.id}</td>
     <td><strong>${t.taskName}</strong></td>
@@ -4438,6 +4534,7 @@ function loadEmpTasksForId(empId){
 
 function renderAdminEmpView(){
   recalcStatuses();
+  {const nw=document.getElementById('emp-next-wrap');if(nw)nw.innerHTML='';}
   const selEl=document.getElementById('emp-view-sel');const empId=selEl?selEl.value:'';
   const tasks=empId?DB.tasks.filter(t=>t.empId===empId):DB.tasks;
   const title=document.getElementById('emp-tasks-title');if(title)title.textContent=empId?`Tasks for ${(DB.staff.find(s=>s.empId===empId)||{}).name||empId}`:'All Employee Tasks';
@@ -4470,7 +4567,8 @@ function renderEmpDashboard(){
   document.getElementById('ed-kpi').textContent=avg||'—';document.getElementById('ed-kpi').style.color=kpiClr;
   const rate=tasks.filter(x=>x.status!=='Excused'&&x.status!=='Awaiting Approval').length?Math.round((done.length/tasks.filter(x=>x.status!=='Excused'&&x.status!=='Awaiting Approval').length)*100):0;
   document.getElementById('ed-rate-bar').style.width=rate+'%';document.getElementById('ed-rate-num').textContent=rate+'%';
-  const recent=[...tasks].sort((a,b)=>(b.targetDate||'').localeCompare(a.targetDate||'')).slice(0,5);
+  const recent=tasks.filter(t=>!(AA_TYPES.includes(t.taskType)&&t.status==='Completed')).sort((a,b)=>(b.targetDate||'').localeCompare(a.targetDate||'')).slice(0,5);
+  {const mp=document.getElementById('ed-month-progress');if(mp)mp.innerHTML=monthProgressHTML(tasks,!!(document.getElementById('ed-month-all')||{}).checked);}
   const rt=document.getElementById('ed-recent-tasks');
   rt.innerHTML=recent.length?recent.map(t=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);">
     <div><div style="font-size:13px;font-weight:600">${t.taskName}</div><div style="font-size:11px;color:var(--muted);margin-top:3px;font-weight:400">${t.taskType} · Target: ${formatDate(t.targetDate)}</div></div>
